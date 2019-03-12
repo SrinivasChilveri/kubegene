@@ -1,7 +1,7 @@
 
 .PHONY: all kube-dag genectl clean test e2e
 
-PACKAGE=kubegene.io/kubegene/cmd/genectl/commands
+PACKAGE=kubegene.io/kubegene
 CURRENT_DIR=$(shell pwd)
 VERSION=$(shell git describe --long --match='v*' --dirty)
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -34,7 +34,7 @@ all: kube-dag genectl
 
 kube-dag:
 	mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o ./bin/kube-dag ./cmd/kube-dag
+	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '${LDFLAGS} -extldflags "-static"' -o ./bin/kube-dag ./cmd/kube-dag
 
 genectl:
 	mkdir -p bin
