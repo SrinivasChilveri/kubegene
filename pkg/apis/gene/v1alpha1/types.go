@@ -298,54 +298,13 @@ type Dependent struct {
 
 // DeepCopyInto is an custom deepcopy function to deal with our use of the interface{} type
 func (i *CommandsIter) DeepCopyInto(out *CommandsIter) {
-	out.Command = i.Command
-	out.Depends = map[string]bool{}
 
-	for name, flag := range i.Depends {
-		out.Depends[name] = flag
+	inBytes, err := json.Marshal(i)
+	if err != nil {
+		panic(err)
 	}
-
-	out.Vars = make([]interface{}, 0, len(i.Vars))
-	out.VarsIter = make([]interface{}, 0, len(i.VarsIter))
-
-	for j := 0; j < len(i.Vars); j++ {
-		inBytes, err := json.Marshal(i.Vars[j])
-		if err != nil {
-			panic(err)
-		}
-		err = json.Unmarshal(inBytes, out.Vars[j])
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	for j := 0; j < len(i.VarsIter); j++ {
-		inBytes, err := json.Marshal(i.VarsIter[j])
-		if err != nil {
-			panic(err)
-		}
-		err = json.Unmarshal(inBytes, out.VarsIter[j])
-		if err != nil {
-			panic(err)
-		}
+	err = json.Unmarshal(inBytes, out)
+	if err != nil {
+		panic(err)
 	}
 }
-
-// UnmarshalJSON implements the json.Unmarshaller interface.
-func (i *CommandsIter) UnmarshalJSON(value []byte) error {
-	return json.Unmarshal(value, &i)
-}
-
-// MarshalJSON implements the json.Marshaller interface.
-func (i CommandsIter) MarshalJSON() ([]byte, error) {
-	return json.Marshal(i)
-}
-
-// OpenAPISchemaType is used by the kube-openapi generator when constructing
-// the OpenAPI spec of this type.
-// See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
-func (i CommandsIter) OpenAPISchemaType() []string { return []string{"string"} }
-
-// OpenAPISchemaFormat is used by the kube-openapi generator when constructing
-// the OpenAPI spec of this type.
-func (i CommandsIter) OpenAPISchemaFormat() string { return "commands_iter" }

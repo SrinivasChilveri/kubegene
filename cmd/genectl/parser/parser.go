@@ -90,6 +90,16 @@ func ValidateWorkflow(workflow *Workflow) ErrorList {
 	return allErr
 }
 
+func convert2ArrayOfIfs(data []Var) []interface{} {
+	vars := make([]interface{}, 0)
+	for _, arr := range data {
+		for _, a := range arr {
+			vars = append(vars, a)
+		}
+	}
+	return vars
+}
+
 func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tools map[string]Tool) error {
 	// merge workflows input and input json.
 	mergedInputs, err := MergeInputs(workflow.Inputs, inputs)
@@ -138,11 +148,13 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 		newCommands := ReplaceArray(jobInfo.Commands, inputsReplaceData)
 
 		// populate data for commandIter.vars
-		prefix := fmt.Sprintf("workflows.commands_iter.%s.vars", jobName)
+		prefix := fmt.Sprintf("***workflows.commands_iter.%s.vars", jobName)
+		fmt.Println(" before InstantiateVars", prefix, jobInfo.CommandsIter.Vars)
 		vars, err := InstantiateVars(prefix, jobInfo.CommandsIter.Vars, inputsReplaceData)
 		if err != nil {
 			return err
 		}
+		fmt.Println(" ****after InstantiateVars", vars)
 		length, err := ValidateInstantiatedVars("workflows."+jobName, vars)
 		if err != nil {
 			return err
@@ -150,10 +162,12 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 
 		// populate data for commandIter.varsIter
 		prefix = fmt.Sprintf("workflows.commands_iter.%s.varsIter", jobName)
+		fmt.Println(" before InstantiateVarsIter", prefix, jobInfo.CommandsIter.Vars)
 		varsIter, dep, err := InstantiateVarsIter(prefix, jobInfo.CommandsIter.VarsIter, inputsReplaceData)
 		if err != nil {
 			return err
 		}
+		// if no get_result then len(dep) is zero
 		if len(dep) == 0 {
 			if length != 0 && len(varsIter) != 0 && len(varsIter) != length {
 				return fmt.Errorf("workflows.%s: the length of vars is %d, but the length of varsIter is %d", jobName, length, len(varsIter))
@@ -177,6 +191,8 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 			tmpJob.Commands = newCommands
 			tmpJob.Depends = jobInfo.Depends
 			jobs[jobName] = tmpJob
+
+			fmt.Println("tmpJob", tmpJob)
 		} else {
 
 			tmpJob.Commands = newCommands
@@ -185,8 +201,8 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 
 			tmpJob.CommandsIter.Command = command
 			tmpJob.CommandsIter.Depends = dep
-			//tmpJob.CommandsIter.Vars = vars
-			//tmpJob.CommandsIter.VarsIter = varsIter
+			tmpJob.CommandsIter.Vars = convert2ArrayOfIfs(vars)
+			tmpJob.CommandsIter.VarsIter = convert2ArrayOfIfs(varsIter)
 
 			tmpJob.Depends = jobInfo.Depends
 			jobs[jobName] = tmpJob

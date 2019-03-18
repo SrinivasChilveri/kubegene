@@ -81,6 +81,7 @@ type ExecutionController struct {
 	execJobController *ExecutionJobController
 
 	execStatusUpdater ExecutionStatusUpdater
+	execUpdater       ExecutionUpdater
 }
 
 func NewExecutionController(p *ControllerParameters) *ExecutionController {
@@ -117,6 +118,7 @@ func NewExecutionController(p *ControllerParameters) *ExecutionController {
 	controller.execGraphBuilder = NewGraphBuilder()
 	controller.execJobController = NewExecutionJobController(p.KubeClient, controller.jobLister, controller.execLister, controller.eventQueue, controller.execGraphBuilder)
 	controller.execStatusUpdater = NewExecutionStatusUpdater(p.ExecutionClient)
+	controller.execUpdater = NewExecutionUpdater(p.ExecutionClient)
 
 	return controller
 }
