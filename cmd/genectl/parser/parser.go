@@ -65,7 +65,7 @@ func ValidateWorkflow(workflow *Workflow) ErrorList {
 		allErr = append(allErr, ValidateCommands(jobName, job.Commands, workflow.Inputs)...)
 
 		// validate commandsIter
-		allErr = append(allErr, ValidateCommandsIter(jobName, job.CommandsIter, workflow.Inputs)...)
+		allErr = append(allErr, ValidateCommandsIter(jobName, job.CommandsIter, workflow.Inputs, workflow)...)
 
 		// validate depends
 		allErr = append(allErr, ValidateDepends(jobName, job.Depends, workflow.Jobs)...)
@@ -150,32 +150,48 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 
 		// populate data for commandIter.varsIter
 		prefix = fmt.Sprintf("workflows.commands_iter.%s.varsIter", jobName)
-		varsIter, err := InstantiateVars(prefix, jobInfo.CommandsIter.VarsIter, inputsReplaceData)
+		varsIter, dep, err := InstantiateVarsIter(prefix, jobInfo.CommandsIter.VarsIter, inputsReplaceData)
 		if err != nil {
 			return err
 		}
-		if length != 0 && len(varsIter) != 0 && len(varsIter) != length {
-			return fmt.Errorf("workflows.%s: the length of vars is %d, but the length of varsIter is %d", jobName, length, len(varsIter))
+		if len(dep) == 0 {
+			if length != 0 && len(varsIter) != 0 && len(varsIter) != length {
+				return fmt.Errorf("workflows.%s: the length of vars is %d, but the length of varsIter is %d", jobName, length, len(varsIter))
+			}
+
+			// convert varsIter to var
+			iterVars := VarIter2Vars(varsIter)
+
+			// merge vars
+			vars = append(vars, iterVars...)
+
+			// populate data for CommandsIter.Command.
+			command := ReplaceVariant(jobInfo.CommandsIter.Command, inputsReplaceData)
+
+			// generate all commands.
+			iterCommands := Iter2Array(command, vars)
+
+			// merge jobInfo.commands and jobInfo.iterCommands
+			newCommands = append(newCommands, iterCommands...)
+
+			tmpJob.Commands = newCommands
+			tmpJob.Depends = jobInfo.Depends
+			jobs[jobName] = tmpJob
+		} else {
+
+			tmpJob.Commands = newCommands
+			// populate data for CommandsIter.Command.
+			command := ReplaceVariant(jobInfo.CommandsIter.Command, inputsReplaceData)
+
+			tmpJob.CommandsIter.Command = command
+			tmpJob.CommandsIter.Depends = dep
+			//tmpJob.CommandsIter.Vars = vars
+			//tmpJob.CommandsIter.VarsIter = varsIter
+
+			tmpJob.Depends = jobInfo.Depends
+			jobs[jobName] = tmpJob
+
 		}
-
-		// convert varsIter to var
-		iterVars := VarIter2Vars(varsIter)
-
-		// merge vars
-		vars = append(vars, iterVars...)
-
-		// populate data for CommandsIter.Command.
-		command := ReplaceVariant(jobInfo.CommandsIter.Command, inputsReplaceData)
-
-		// generate all commands.
-		iterCommands := Iter2Array(command, vars)
-
-		// merge jobInfo.commands and jobInfo.iterCommands
-		newCommands = append(newCommands, iterCommands...)
-
-		tmpJob.Commands = newCommands
-		tmpJob.Depends = jobInfo.Depends
-		jobs[jobName] = tmpJob
 	}
 	workflow.Jobs = jobs
 
