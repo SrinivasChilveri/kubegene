@@ -30,9 +30,14 @@ import (
 	batchv1listers "k8s.io/client-go/listers/batch/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genelisters "kubegene.io/kubegene/pkg/client/listers/gene/v1alpha1"
 	"kubegene.io/kubegene/pkg/util"
+	"kubegene.io/kubegene/pkg/graph"
+	"kubegene.io/kubegene/cmd/genectl/parser"
+
+	"strings"
+
 )
 
 type EventType string
@@ -66,6 +71,7 @@ type ExecutionJobController struct {
 	executionLister  genelisters.ExecutionLister
 	queue            workqueue.RateLimitingInterface
 	execGraphBuilder *GraphBuilder
+	execUpdater ExecutionUpdater
 }
 
 func NewExecutionJobController(
@@ -74,6 +80,7 @@ func NewExecutionJobController(
 	executionLister genelisters.ExecutionLister,
 	eventQueue workqueue.RateLimitingInterface,
 	execGraphBuilder *GraphBuilder,
+	execUpdater ExecutionUpdater,
 ) *ExecutionJobController {
 	return &ExecutionJobController{
 		queue:            eventQueue,
@@ -81,6 +88,7 @@ func NewExecutionJobController(
 		jobLister:        jobLister,
 		executionLister:  executionLister,
 		execGraphBuilder: execGraphBuilder,
+		execUpdater:execUpdater,
 	}
 }
 
@@ -177,6 +185,23 @@ func (e *ExecutionJobController) syncHandler(event Event) error {
 			if allDependentsFinished {
 				glog.V(2).Infof("all dependent of job %v has run successfully, start running.", child.Data.Job.Name)
 
+				/*start changes related to dynamicconcurrency / get_result */
+				if child.Data.DynamicJob != nil {
+					// get the result of the dependent job using getJobResult()
+					result,err := e.getJobResult(vertex.Data.Job)
+					if err != nil {
+						glog.Infof("getJobResult failed %v", err)
+						return fmt.Errorf("getJobResult failed : %v", err)
+					}
+
+					// construct the dynamic job based on result
+					e.createDynamicJob(child,result,graph,event.Key)
+					// update the graph
+					// update the execution e.execUpdater.UpdateExecution(exec, execution)
+
+				}
+				/*end changes related to dynamic concurrency or get_result*/
+
 				if e.shouldStartJob(event.Key, child.Data.Job) {
 					if err := e.createJob(child.Data.Job); err != nil {
 						key := util.KeyOf(child.Data.Job)
@@ -189,6 +214,164 @@ func (e *ExecutionJobController) syncHandler(event Event) error {
 		}
 	}
 	return nil
+}
+
+func evalgetResult(output string,vars[]interface{})(  []parser.Var ,  string, error) {
+
+	result := make([]parser.Var, 0, len(vars))
+	var parentJobName string
+	for _,vs := range vars {
+		v := vs.([]interface{})
+
+		if item,ok := v[0].(string) ; ok && item == "get_result" {
+
+			parentJobName := v[1].(string)
+			sep := v[2].(string)
+
+			if sep == ""{
+				temp := []interface{}{output}
+				result = append(result,temp)
+			} else {
+				var strslice [] interface{}
+				for _,str := range strings.Split(output,sep){
+					if str != "" {
+						strslice = append(strslice, str)
+					}
+				}
+				temp := []interface{}{strslice}
+				result = append(result,temp)
+			}
+			glog.Infof("In evalgetResult jobName: %s sep:%s", parentJobName,sep)
+		}
+	}
+	glog.Infof("In evalgetResult result: %v", result)
+	return result,parentJobName,nil
+}
+func ConvertVars(vars []interface{}) []parser.Var {
+	result := make([]parser.Var, 0, len(vars))
+
+	for _,v := range vars {
+		res := make([]interface{}, 0)
+		res = append(res,v)
+		result = append(result, res)
+	}
+	return result
+}
+
+
+func (e *ExecutionJobController)createDynamicJob(child * graph.Vertex ,jobresult string,graph *graph.Graph,key string ){
+
+	job := child.Data.Job
+	controllerRef := metav1.GetControllerOf(job)
+	// This should never happen because we do the check when we queue the job.
+	// Unless someone remove the OwnerReference on the job.
+	if controllerRef == nil {
+		glog.Infof("can not find ownerReference for job %s", job.Name)
+		return
+	}
+	// get the result here or pass the result to this function
+	/*
+	sharedExec := c.resolveControllerRef(job.Namespace, controllerRef)
+	if sharedExec == nil {
+		// Ignore jobs unrelated to execution.
+		glog.Infof("job %s does not belongs to execution", key)
+		return true, nil
+	}
+	exec := sharedExec.DeepCopy()
+	*/
+	/*
+		// convert varsIter to var
+		iterVars := VarIter2Vars(varsIter)
+
+		// merge vars
+		vars = append(vars, iterVars...)
+
+		// populate data for CommandsIter.Command.
+		command := ReplaceVariant(jobInfo.CommandsIter.Command, inputsReplaceData)
+
+		// generate all commands.
+		iterCommands := Iter2Array(command, vars)
+
+		// merge jobInfo.commands and jobInfo.iterCommands
+		newCommands = append(newCommands, iterCommands...)
+
+		tmpJob.Commands = newCommands
+		tmpJob.Depends = jobInfo.Depends
+		jobs[jobName] = tmpJob
+	 */
+
+	task := child.Data.DynamicJob.DeepCopy();
+	varsIter,parentJobName,err := evalgetResult (jobresult,child.Data.DynamicJob.CommandsIter.VarsIter)
+	if err != nil {
+		glog.V(2).Infof("Error in evalgetResult execution job name %q , . Error: %v", job.Name, err)
+		return
+	}
+	glog.V(2).Infof("evalgetResult output parentJobName:%s , varsIter: %v", parentJobName, varsIter)
+
+	newCommands := child.Data.DynamicJob.CommandSet
+
+	vars := ConvertVars(child.Data.DynamicJob.CommandsIter.Vars)
+
+	// convert varsIter to var
+	iterVars := parser.VarIter2Vars(varsIter)
+
+	// merge vars
+	vars = append(vars, iterVars...)
+
+	command := child.Data.DynamicJob.CommandsIter.Command
+
+	// generate all commands.
+	iterCommands := parser.Iter2Array(command, vars)
+
+	// merge jobInfo.commands and jobInfo.iterCommands
+	newCommands = append(newCommands, iterCommands...)
+
+	//now need to update the task based on the new parameters
+
+	task.CommandSet = newCommands
+
+	//update this task in the execution struct then call the Update()
+	namespace, name, _ := cache.SplitMetaNamespaceKey(key)
+	execution, err := e.executionLister.Executions(namespace).Get(name)
+	if errors.IsNotFound(err) {
+		glog.V(2).Infof("Execution %v has been deleted", key)
+		return
+	}
+	if err != nil {
+		glog.Errorf("Get execution %s error: %v", key, err)
+		return
+	}
+
+	execcopy := execution.DeepCopy();
+
+	for _,tt  := range execcopy.Spec.Tasks {
+		if tt.Name == task.Name {
+			tt.CommandSet = task.CommandSet
+		}
+	}
+	glog.V(2).Infof("Original Execution %v ", execution)
+
+	glog.V(2).Infof("Updated Execution %v ", execcopy)
+
+	e.execUpdater.UpdateExecution(execcopy,execution)
+
+
+	// on success update the graph
+	/*
+	jobInfos := []*graph.JobInfo{}
+	vertices := []*graph.Vertex{}
+	for index, command := range task.CommandSet {
+		jobName := jobNamePrefix + strconv.Itoa(index)
+		// make up k8s job resource
+		job := newJob(jobName, command, execution, &task)
+		jobInfo := graph.NewJobInfo(job, false, task.Type,nil)
+		jobInfos = append(jobInfos, jobInfo)
+		vertices = append(vertices, graph.NewVertex(jobInfo,false))
+	}
+	 */
+
+
+
 }
 
 func (e *ExecutionJobController) createJob(job *batch.Job) error {
@@ -204,6 +387,45 @@ func (e *ExecutionJobController) createJob(job *batch.Job) error {
 	}
 
 	return err
+}
+
+func (e *ExecutionJobController) getJobResult(job *batch.Job) (string,error) {
+	result := ""
+	job, err := e.jobLister.Jobs(job.Namespace).Get(job.Name)
+
+	if err != nil {
+		glog.V(2).Infof("In getJobResult func get job failed: %v", err)
+		return result,err
+	}
+
+	sel  ,err := metav1.LabelSelectorAsSelector(job.Spec.Selector)
+	if err != nil {
+		glog.V(2).Infof("In getJobResult func LabelSelectorAsSelector failed: %v", err)
+		return result,err
+	}
+	var opts metav1.ListOptions
+
+	opts.LabelSelector = sel.String()
+	podList, err := e.kubeClient.CoreV1().Pods(job.Namespace).List(opts)
+	if err != nil  {
+		glog.V(2).Infof("In getJobResult func get pods list failed: %v", err)
+		return result,err
+	}
+
+	if len(podList.Items) != 1 {
+		glog.V(2).Infof("In getJobResult func  pods list has more than one pod ")
+		err := fmt.Errorf("Received  podList has more than one pod")
+		return result,err
+	}
+
+
+	res, err := e.kubeClient.CoreV1().Pods(job.Namespace).GetLogs(podList.Items[0].Name,nil).Param("limitBytes","1024").DoRaw()
+	if err != nil  {
+		glog.V(2).Infof("In getJobResult func get logs failed: %v", err)
+		return result,err
+	}
+	result = string(res)
+	return result,err
 }
 
 func (e *ExecutionJobController) handleErr(err error, event Event) {

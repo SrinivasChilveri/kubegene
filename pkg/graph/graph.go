@@ -29,19 +29,22 @@ type JobInfo struct {
 	Finished bool
 	Job      *batch.Job
 	TaskType genev1alpha1.TaskType
+	DynamicJob *genev1alpha1.Task
 }
 
-func NewJobInfo(job *batch.Job, finished bool, taskType genev1alpha1.TaskType) *JobInfo {
+func NewJobInfo(job *batch.Job, finished bool, taskType genev1alpha1.TaskType,dynamicJob *genev1alpha1.Task) *JobInfo {
 	return &JobInfo{
 		Job:      job,
 		Finished: finished,
 		TaskType: taskType,
+		DynamicJob:dynamicJob,
 	}
 }
 
 type Vertex struct {
 	Data     *JobInfo
 	Children []*Vertex
+	dynamic bool
 }
 
 type Graph struct {
@@ -61,10 +64,11 @@ func NewGraph(size int) *Graph {
 	}
 }
 
-func NewVertex(data *JobInfo, children ...*Vertex) *Vertex {
+func NewVertex(data *JobInfo, flag bool,children ...*Vertex) *Vertex {
 	vertex := &Vertex{
 		Data:     data,
 		Children: make([]*Vertex, 0),
+		dynamic:flag,
 	}
 	vertex.Children = append(vertex.Children, children...)
 

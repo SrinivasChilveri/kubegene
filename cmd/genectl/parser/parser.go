@@ -285,6 +285,11 @@ func TransWorkflow2Execution(workflow *Workflow) (*execv1alpha1.Execution, error
 		// we have alreay merge workflows command and commandIter.
 		task.CommandSet = jobInfo.Commands
 
+		//if job has get_result function in vars_iter
+		if ( len(jobInfo.CommandsIter.Depends) > 0 ) {
+			task.CommandsIter = TransCommandIter2ExecCommandIter(jobInfo.CommandsIter)
+		}
+
 		var cpuQuantity resource.Quantity
 		var memoryQuantity resource.Quantity
 		var err error
