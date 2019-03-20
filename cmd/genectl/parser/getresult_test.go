@@ -17,6 +17,7 @@ limitations under the License.
 package parser
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -74,29 +75,15 @@ func TestGetgetResultFuncParam(t *testing.T) {
 		ExpectSep   string
 	}{
 		{
-			Str:         "get_result(2, ${npart})",
-			ExpectjName: "2",
-			ExpectSep:   "${npart}",
-		},
-		{
-			Str:         "get_result({start}, 2)",
-			ExpectjName: "{start}",
-			ExpectSep:   "2",
-		},
-		{
-			Str:         "get_result(job-target, \"\n\")",
+			Str:         "get_result(job-target)",
 			ExpectjName: "job-target",
-			ExpectSep:   "\n",
-		},
-		{
-			Str:         "get_result(1, 2)",
-			ExpectjName: "1",
-			ExpectSep:   "2",
-		},
-		{
-			Str:         "get_result(1)",
-			ExpectjName: "1",
 			ExpectSep:   "",
+		},
+
+		{
+			Str:         `get_result({start}, " ")`,
+			ExpectjName: "{start}",
+			ExpectSep:   " ",
 		},
 	}
 
@@ -108,6 +95,7 @@ func TestGetgetResultFuncParam(t *testing.T) {
 		if sep != testCase.ExpectSep {
 			t.Errorf("%d: unexpected separator; got %s, expected %s", i, sep, testCase.ExpectSep)
 		}
+		fmt.Println("succes===")
 
 	}
 }

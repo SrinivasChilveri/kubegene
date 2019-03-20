@@ -118,9 +118,8 @@ func NewExecutionController(p *ControllerParameters) *ExecutionController {
 	controller.execGraphBuilder = NewGraphBuilder()
 	controller.execUpdater = NewExecutionUpdater(p.ExecutionClient)
 	controller.execJobController = NewExecutionJobController(p.KubeClient, controller.jobLister, controller.execLister,
-		controller.eventQueue, controller.execGraphBuilder,controller.execUpdater)
+		controller.eventQueue, controller.execGraphBuilder, controller.execUpdater)
 	controller.execStatusUpdater = NewExecutionStatusUpdater(p.ExecutionClient)
-
 
 	return controller
 }

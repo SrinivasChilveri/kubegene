@@ -74,6 +74,8 @@ func GetgetResultFuncParam(str string) (jobName string, sep string) {
 
 	jobName = strings.Replace(submatch[1], " ", "", -1)
 
+	fmt.Println("jobName ", jobName)
+
 	if matched := inputsVarRegExp.MatchString(str); matched {
 		return
 	}

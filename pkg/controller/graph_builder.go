@@ -21,12 +21,12 @@ import (
 	"strings"
 	"sync"
 
+	"fmt"
 	batch "k8s.io/api/batch/v1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genev1alpha1 "kubegene.io/kubegene/pkg/apis/gene/v1alpha1"
 	"kubegene.io/kubegene/pkg/graph"
-	"fmt"
 )
 
 // Separator used to construct job name.
@@ -85,15 +85,15 @@ func newGraph(execution *genev1alpha1.Execution) *graph.Graph {
 
 		jobNamePrefix := execution.Name + Separator + task.Name + Separator
 
-		if len( task.CommandsIter.Depends ) > 0 {
+		if len(task.CommandsIter.Depends) > 0 {
 			localtask := task
-			fmt.Println("task.CommandSet",task.CommandSet)
-			jobName := jobNamePrefix + strconv.Itoa(0)
+			fmt.Println("task.CommandSet", task.CommandSet)
+			jobName := jobNamePrefix //+ strconv.Itoa(0)
 			// make up k8s job resource
 			job := newJob(jobName, "", execution, &task)
-			jobInfo := graph.NewJobInfo(job, false, task.Type,&localtask)
+			jobInfo := graph.NewJobInfo(job, false, task.Type, &localtask)
 			jobInfos = append(jobInfos, jobInfo)
-			vertices = append(vertices, graph.NewVertex(jobInfo,true))
+			vertices = append(vertices, graph.NewVertex(jobInfo, true))
 
 		} else {
 
@@ -101,9 +101,9 @@ func newGraph(execution *genev1alpha1.Execution) *graph.Graph {
 				jobName := jobNamePrefix + strconv.Itoa(index)
 				// make up k8s job resource
 				job := newJob(jobName, command, execution, &task)
-				jobInfo := graph.NewJobInfo(job, false, task.Type,nil)
+				jobInfo := graph.NewJobInfo(job, false, task.Type, nil)
 				jobInfos = append(jobInfos, jobInfo)
-				vertices = append(vertices, graph.NewVertex(jobInfo,false))
+				vertices = append(vertices, graph.NewVertex(jobInfo, false))
 			}
 		}
 	}

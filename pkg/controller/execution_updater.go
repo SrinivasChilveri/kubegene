@@ -21,11 +21,11 @@ import (
 	"fmt"
 
 	"github.com/evanphx/json-patch"
+	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genev1alpha1 "kubegene.io/kubegene/pkg/apis/gene/v1alpha1"
 	geneclientset "kubegene.io/kubegene/pkg/client/clientset/versioned/typed/gene/v1alpha1"
 	"kubegene.io/kubegene/pkg/util"
-	"github.com/golang/glog"
 )
 
 // ExecutionUpdater is an interface used to update the ExecutionSpec associated with a Execution.
@@ -53,28 +53,28 @@ func (esu *executionUpdater) UpdateExecution(modified *genev1alpha1.Execution, o
 		var current *genev1alpha1.Execution
 		current, err = esu.execClient.Executions(modified.Namespace).Get(modified.Name, metav1.GetOptions{})
 		if err != nil {
-			glog.Error("getting the execution is failed. Error: %v",  err)
+			glog.Error("getting the execution is failed. Error: %v", err)
 			break
 		}
 
 		var curBytes []byte
 		curBytes, err = json.Marshal(current)
 		if err != nil {
-			glog.Error("after getting the execution json.Marshal failed. Error: %v",  err)
+			glog.Error("after getting the execution json.Marshal failed. Error: %v", err)
 			break
 		}
 
 		var bytes []byte
 		bytes, err = jsonpatch.MergePatch(curBytes, patchBytes)
 		if err != nil {
-			glog.Error("after getting the execution jsonpatch.MergePatch failed. Error: %v",  err)
+			glog.Error("after getting the execution jsonpatch.MergePatch failed. Error: %v", err)
 			break
 		}
 
 		var updated genev1alpha1.Execution
 		err = json.Unmarshal(bytes, &updated)
 		if err != nil {
-			glog.Error("after getting the execution json.Unmarshal failed. Error: %v",  err)
+			glog.Error("after getting the execution json.Unmarshal failed. Error: %v", err)
 			break
 		}
 

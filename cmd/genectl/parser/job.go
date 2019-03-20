@@ -225,8 +225,8 @@ func TransCommandIter2ExecCommandIter(commandsIter CommandsIter) execv1alpha1.Co
 
 	execCommandIter.Command = commandsIter.Command
 	execCommandIter.Depends = map[string]bool{}
-	execCommandIter.Vars = make([]interface{},len(commandsIter.Vars))
-	execCommandIter.VarsIter = make([]interface{},len(commandsIter.VarsIter))
+	execCommandIter.Vars = make([]interface{}, len(commandsIter.Vars))
+	execCommandIter.VarsIter = make([]interface{}, len(commandsIter.VarsIter))
 
 	for _, var1 := range commandsIter.Vars {
 		execCommandIter.Vars = append(execCommandIter.Vars, var1)

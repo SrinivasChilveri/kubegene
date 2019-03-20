@@ -149,12 +149,12 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 
 		// populate data for commandIter.vars
 		prefix := fmt.Sprintf("***workflows.commands_iter.%s.vars", jobName)
-		fmt.Println(" before InstantiateVars", prefix, jobInfo.CommandsIter.Vars)
+		//fmt.Println(" before InstantiateVars", prefix, jobInfo.CommandsIter.Vars)
 		vars, err := InstantiateVars(prefix, jobInfo.CommandsIter.Vars, inputsReplaceData)
 		if err != nil {
 			return err
 		}
-		fmt.Println(" ****after InstantiateVars", vars)
+		//fmt.Println(" ****after InstantiateVars", vars)
 		length, err := ValidateInstantiatedVars("workflows."+jobName, vars)
 		if err != nil {
 			return err
@@ -162,7 +162,7 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 
 		// populate data for commandIter.varsIter
 		prefix = fmt.Sprintf("workflows.commands_iter.%s.varsIter", jobName)
-		fmt.Println(" before InstantiateVarsIter", prefix, jobInfo.CommandsIter.Vars)
+		//fmt.Println(" before InstantiateVarsIter", prefix, jobInfo.CommandsIter.Vars)
 		varsIter, dep, err := InstantiateVarsIter(prefix, jobInfo.CommandsIter.VarsIter, inputsReplaceData)
 		if err != nil {
 			return err
@@ -192,7 +192,7 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 			tmpJob.Depends = jobInfo.Depends
 			jobs[jobName] = tmpJob
 
-			fmt.Println("tmpJob", tmpJob)
+			//fmt.Println("tmpJob", tmpJob)
 		} else {
 
 			tmpJob.Commands = newCommands
@@ -286,7 +286,7 @@ func TransWorkflow2Execution(workflow *Workflow) (*execv1alpha1.Execution, error
 		task.CommandSet = jobInfo.Commands
 
 		//if job has get_result function in vars_iter
-		if ( len(jobInfo.CommandsIter.Depends) > 0 ) {
+		if len(jobInfo.CommandsIter.Depends) > 0 {
 			task.CommandsIter = TransCommandIter2ExecCommandIter(jobInfo.CommandsIter)
 		}
 
