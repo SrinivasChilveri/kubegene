@@ -18,8 +18,11 @@ package parser
 
 import (
 	"fmt"
-	execv1alpha1 "kubegene.io/kubegene/pkg/apis/gene/v1alpha1"
 	"regexp"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	execv1alpha1 "kubegene.io/kubegene/pkg/apis/gene/v1alpha1"
 )
 
 const CPURegexFmt = `^\d+(\.\d+)?[cC]?$`
@@ -231,10 +234,20 @@ func TransCommandIter2ExecCommandIter(commandsIter CommandsIter) *execv1alpha1.C
 	return &execCommandIter
 }
 
-func TransCond2ExecCond(condition interface{}) *execv1alpha1.Condition {
-	execCond := execv1alpha1.Condition{}
+func TransCond2ExecCond(condition *ConditionInfo) *execv1alpha1.ConditionInfo {
+	execCond := execv1alpha1.ConditionInfo{}
 
-	execCond.Condition = condition
+	execCond.DependJobName = condition.DependJobName
+
+	execCond.RspMatch = make([]metav1.LabelSelectorRequirement, len(condition.resultMatch))
+
+	for i := range condition.resultMatch {
+		execCond.RspMatch[i].Key = condition.resultMatch[i].Key
+		execCond.RspMatch[i].Operator = condition.resultMatch[i].Operator
+		execCond.RspMatch[i].Values = make([]string, len(condition.resultMatch[i].Values))
+		execCond.RspMatch[i].Values = condition.resultMatch[i].Values
+
+	}
 
 	return &execCond
 }

@@ -18,58 +18,13 @@ package parser
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
+
+	labels "k8s.io/apimachinery/pkg/labels"
 
 	"kubegene.io/kubegene/pkg/common"
 )
 
-const IsCheckResultFuncRegexFmt = `^check_result\(\s*([^,]+)\s*(,\s*("([^,]+)"|'([^,]+)'|\$\{[^,]+\}))?\)$`
-
-var checkResultRegExp = regexp.MustCompile(IsCheckResultFuncRegexFmt)
-var inputsChkVarRegExp = regexp.MustCompile("\\$\\{[^,]+\\}")
-
-// IsCheckResultFunc checks a string whether is a check_result function.
-// check_result function in the workflows must follow the format:
-// 		check_result(jobName, exp)
-// The jobName of the Job
-// The exp used to determine if the output of jobName is equal or not:
-// 	Can be a single character or a string;
-// 	Use double quotes to indicate, such as "\n";
-// 	Variables such as ${input} can be used.
-//
-// check_result function example
-//
-// ---- check_result(job-a, "\n")
-// ---- check_result(job-target, ${input})
-func IsCheckResultFunc(str string) bool {
-	return checkResultRegExp.MatchString(str)
-}
-
-// checkResultFuncParam extract parameter from check_result function.
-// for example:
-//
-// 		Str ---> check_result(job-a,"\n")
-// 		result ---> job-a,  "\n"
-//
-// 		Str ---> check_result(job-target,exp )
-// 		result ---> job-target,exp
-func checkResultFuncParam(str string) (jobName string, exp string) {
-
-	submatch := checkResultRegExp.FindStringSubmatch(str)
-
-	jobName = strings.Replace(submatch[1], " ", "", -1)
-
-	if submatch[4] != "" {
-		exp = submatch[4]
-	} else {
-		exp = submatch[5]
-	}
-	exp = decodeNonPrintChar(exp)
-	return
-}
-
-func validateCheckResultDependency(prefix string, jobName string, dependJobName string, workflow *Workflow) error {
+func validateConditionDependency(prefix string, jobName string, dependJobName string, workflow *Workflow) error {
 
 	dependJob, ok := workflow.Jobs[dependJobName]
 	if !ok {
@@ -107,107 +62,67 @@ func validateCheckResultDependency(prefix string, jobName string, dependJobName 
 	return err
 }
 
-// validateCheckResultFunc validate parameter of check_result function is valid.
-func validateCheckResultFunc(prefix, str string, inputs map[string]Input, jobName string, workflow *Workflow) ErrorList {
-	allErr := ErrorList{}
-	dependJobName, exp := checkResultFuncParam(str)
-
-	if !isJobExists(jobName, workflow) {
-		err := fmt.Errorf("%s: the check_result function job is missing, but the real one is %s", prefix, dependJobName)
-		allErr = append(allErr, err)
-	}
-
-	if IsVariant(exp) {
-		if err := ValidateVariant(prefix, exp, []string{StringType}, inputs); err != nil {
-			allErr = append(allErr, err)
-		}
-	}
-	// validate the dependency
-	err := validateCheckResultDependency(prefix, jobName, dependJobName, workflow)
-	if err != nil {
-		allErr = append(allErr, err)
-	}
-	return allErr
-}
-
-// validateStringCondition validate parameter of condition which is string is valid.
-func validateStringCondition(prefix string, condition string, inputs map[string]Input, jobName string, workflow *Workflow) ErrorList {
-	allErr := ErrorList{}
-	if IsVariant(condition) {
-		if err := ValidateVariant(prefix, condition, []string{StringType}, inputs); err != nil {
-			allErr = append(allErr, err)
-		}
-	} else if IsCheckResultFunc(condition) {
-		allErr = validateCheckResultFunc(prefix, condition, inputs, jobName, workflow)
-	} else {
-		err := fmt.Errorf("In validateStringCondition Invalid condition string %v", condition)
-		allErr = append(allErr, err)
-	}
-	return allErr
-}
-
 // validateCondition validate parameter of condition is valid.
-func validateCondition(jobName string, condition interface{}, inputs map[string]Input, workflow *Workflow) ErrorList {
+func validateCondition(jobName string, condition *ConditionInfo, inputs map[string]Input, workflow *Workflow) ErrorList {
 	allErr := ErrorList{}
 
 	if condition == nil {
 		return allErr
 	}
+	prefix := fmt.Sprintf("workflow.%s.condition", jobName)
 
-	switch condition.(type) {
+	for i := range condition.resultMatch {
 
-	case bool:
-		return allErr
-	case string:
-		prefix := fmt.Sprintf("workflow.%s.condition", jobName)
-		return validateStringCondition(prefix, condition.(string), inputs, jobName, workflow)
-	default:
-		err := fmt.Errorf("In validateCondition Invalid condition parameter %v", condition)
+		if IsVariant(condition.resultMatch[i].Key) {
+			prefix := fmt.Sprintf("workflow.%s.condition.resultmatch.key", jobName)
+			if err := ValidateVariant(prefix, condition.resultMatch[i].Key, []string{StringType}, inputs); err != nil {
+				allErr = append(allErr, err)
+			}
+		}
+
+		if IsVariant(condition.resultMatch[i].Operator) {
+			prefix := fmt.Sprintf("workflow.%s.condition.resultmatch[%d].operator", jobName, i)
+			allErr = append(allErr, fmt.Errorf("%s should not be variant", prefix))
+		}
+		if condition.resultMatch[i].Operator != NodeSelectorOpIn &&
+			condition.resultMatch[i].Operator != NodeSelectorOpNotIn &&
+			condition.resultMatch[i].Operator != NodeSelectorOpExists &&
+			condition.resultMatch[i].Operator != NodeSelectorOpDoesNotExist &&
+			condition.resultMatch[i].Operator != NodeSelectorOpGt &&
+			condition.resultMatch[i].Operator != NodeSelectorOpLt {
+			prefix := fmt.Sprintf("workflow.%s.condition.resultmatch[%d].operator", jobName, i)
+			allErr = append(allErr, fmt.Errorf("%s should only be In,NotIn,DoesNotExist,Exist,Gt,Lt ", prefix))
+		}
+		for j := range condition.resultMatch[i].Values {
+			if IsVariant(condition.resultMatch[i].Values[j]) {
+				prefix := fmt.Sprintf("workflow.%s.condition.resultmatch[%d].value[%d]", jobName, i, j)
+				allErr = append(allErr, fmt.Errorf("%s should not be variant", prefix))
+			}
+		}
+	}
+
+	if err := validateConditionDependency(prefix, jobName, condition.DependJobName, workflow); err != nil {
 		allErr = append(allErr, err)
 	}
 
 	return allErr
 }
 
-func InstantiateCondition(prefix string, condition interface{}, data map[string]string) (common.Var, error) {
+func InstantiateCondition(prefix string, condition *ConditionInfo, data map[string]string) error {
 
 	if condition == nil {
 		return nil, nil
 	}
-
-	switch condition.(type) {
-	case bool:
-		return []interface{}{condition}, nil
-	case string:
-		str := condition.(string)
-		if IsVariant(str) {
-			output := common.ReplaceVariant(str, data)
-			if output == "true" {
-				return []interface{}{true}, nil
-
-			} else if output == "false" {
-				return []interface{}{false}, nil
-			} else {
-				err := fmt.Errorf("Invalid data in the condition %v", condition)
-				return nil, err
-			}
-		} else {
-			ret := InstantiateCheckResultFunc(prefix, condition.(string), data)
-			return ret, nil
+	for i := range condition.resultMatch {
+		if IsVariant(condition.resultMatch[i].Key) {
+			condition.resultMatch[i].Key = common.ReplaceVariant(condition.resultMatch[i].Key, data)
 		}
-	default:
-		err := fmt.Errorf("Invalid data in the condition %v", condition)
-		return nil, err
+		_, err := labels.NewRequirement(condition.resultMatch[i].Key, condition.resultMatch[i].Operator,
+			condition.resultMatch[i].Values)
 
+		if err != nil {
+			return err
+		}
 	}
-}
 
-func InstantiateCheckResultFunc(prefix, str string, data map[string]string) common.Var {
-
-	jobName, exp := checkResultFuncParam(str)
-	// replace variant for sep
-	exp = common.ReplaceVariant(exp, data)
-	chkResult := []interface{}{"check_result", jobName, exp}
-
-	return chkResult
 }

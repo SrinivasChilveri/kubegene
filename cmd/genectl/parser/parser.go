@@ -159,12 +159,10 @@ func InstantiateWorkflow(workflow *Workflow, inputs map[string]interface{}, tool
 		if jobInfo.Condition != nil {
 			// populate data for condition
 			prefix := fmt.Sprintf("workflows.%s.condition", jobName)
-
-			cond, err := InstantiateCondition(prefix, jobInfo.Condition, inputsReplaceData)
+			err := InstantiateCondition(prefix, jobInfo.Condition, inputsReplaceData)
 			if err != nil {
 				return err
 			}
-			jobInfo.Condition = cond
 		}
 
 		// populate data for commands

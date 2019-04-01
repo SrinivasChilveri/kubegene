@@ -248,37 +248,39 @@ func (e *ExecutionJobController) syncHandler(event Event) error {
 }
 func (e *ExecutionJobController) evalConditionResult(dependJob *batch.Job, vertex *graph.Vertex, graph *graph.Graph, key string) (bool, error) {
 
-	glog.Infof("In evalConditionResult condition:%v", vertex.Data.DynamicJob.Condition.Condition)
+	glog.Infof("In evalConditionResult condition:%v", vertex.Data.DynamicJob.Condition)
 
-	v := vertex.Data.DynamicJob.Condition.Condition.([]interface{})
-
-	switch v[0].(type) {
-
-	case bool:
-		return v[0].(bool), nil
-	case string:
-		if item, ok := v[0].(string); ok && item == "check_result" {
-
-			parentJobName := v[1].(string)
-			exp := v[2].(string)
-			glog.Infof("In evalConditionResult jobName: %s sep:%s", parentJobName, exp)
-			// get the result of the dependent job
-			result, err := e.getJobResult(dependJob)
-			if err != nil {
-				return false, fmt.Errorf("getJobResult failed in evalConditionResult: %v", err)
-			}
-
-			if exp == result {
-				return true, nil
-			} else {
-				return false, fmt.Errorf("In evalConditionResult job result is %v but expected value is  %v", result, exp)
-			}
-		} else {
-			return false, fmt.Errorf("In evalConditionResult Invalid condition %v", vertex.Data.DynamicJob.Condition.Condition)
-		}
+	parentJobName := vertex.Data.DynamicJob.Condition.DependJobName
+	exp := vertex.Data.DynamicJob.Condition.RspMatch
+	glog.Infof("In evalConditionResult jobName: %s sep:%v", parentJobName, exp)
+	// get the result of the dependent job
+	result, err := e.getJobResult(dependJob)
+	if err != nil {
+		return false, fmt.Errorf("getJobResult failed in evalConditionResult: %v", err)
 	}
 
-	return false, fmt.Errorf("In evalConditionResult Invalid condition %v", vertex.Data.DynamicJob.Condition.Condition)
+	// TODO Convert the result to the map
+
+	maplabels := make(map[string]string)
+
+	for key, value := range result {
+		maplabels[key] = value
+	}
+
+	var selector metav1.LabelSelector
+	selector.MatchExpressions = exp
+
+	Select, err := metav1.LabelSelectorAsSelector(&selector)
+	if err != nil {
+		return false, fmt.Errorf("metav1.LabelSelectorAsSelector failed in evalConditionResult: %v", err)
+	}
+
+	if !Select.Matches(labels.Set(maplabels)) {
+		return true, nil
+	}
+
+	return false, fmt.Errorf("Result with expection match failedin evalConditionResult")
+
 }
 func evalJobResult(jobResult string, vars []interface{}) ([]common.Var, error) {
 	result := make([]common.Var, 0, len(vars))

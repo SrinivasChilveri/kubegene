@@ -180,6 +180,41 @@ type Depend struct {
 	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 }
 
+// A node selector operator is the set of operators that can be used in
+// a node selector requirement.
+type NodeSelectorOperator string
+
+const (
+	NodeSelectorOpIn           NodeSelectorOperator = "In"
+	NodeSelectorOpNotIn        NodeSelectorOperator = "NotIn"
+	NodeSelectorOpExists       NodeSelectorOperator = "Exists"
+	NodeSelectorOpDoesNotExist NodeSelectorOperator = "DoesNotExist"
+	NodeSelectorOpGt           NodeSelectorOperator = "Gt"
+	NodeSelectorOpLt           NodeSelectorOperator = "Lt"
+)
+
+type ResultVerifier struct {
+	// The label key that the selector applies to.
+	Key string `json:"key" yaml:"key"`
+	// Represents a key's relationship to a set of values.
+	// Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+	Operator NodeSelectorOperator `json:"nodeselectoroperator" yaml:"nodeselectoroperator"`
+	// An array of string values. If the operator is In or NotIn,
+	// the values array must be non-empty. If the operator is Exists or DoesNotExist,
+	// the values array must be empty. If the operator is Gt or Lt, the values
+	// array must have a single element, which will be interpreted as an integer.
+	// This array is replaced during a strategic merge patch.
+	// +optional
+	Values []string `json:"values" yaml:"values"`
+}
+
+// condition information.
+type ConditionInfo struct {
+	// The label key that the selector applies to.
+	DependJobName string           `json:"dependjobname" yaml:"dependjobname"`
+	resultMatch   []ResultVerifier `json:"resultmatch" yaml:"resultmatch"`
+}
+
 // job information.
 type JobInfo struct {
 	// Description describes what this job is to do.
@@ -197,7 +232,7 @@ type JobInfo struct {
 	// Depends is the Name of task this depends on.
 	Depends []Depend `json:"depends,omitempty" yaml:"depends,omitempty"`
 	// conditional branch handling
-	Condition interface{} `json:"condition,omitempty" yaml:"condition,omitempty"`
+	Condition *ConditionInfo `json:"condition,omitempty" yaml:"condition,omitempty"`
 }
 
 // PathsIter similar to CommandsIter.

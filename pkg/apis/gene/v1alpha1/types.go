@@ -114,9 +114,11 @@ type ExecutionSpec struct {
 	Parallelism *int64 `json:"parallelism,omitempty"`
 }
 
-// Condition  conditional branch handling  in Task
-type Condition struct {
-	Condition interface{} `json:"condition,omitempty"`
+// condition information in Task.
+type ConditionInfo struct {
+	// The label key that the selector applies to.
+	DependJobName string                            `json:"dependjobname"`
+	RspMatch      []metav1.LabelSelectorRequirement `json:"rspmatch"`
 }
 
 // Task is a unit of execution in an Execution
@@ -179,7 +181,7 @@ type Task struct {
 
 	// Specifies the condition for this task
 	// +optional
-	Condition *Condition `json:"condition,omitempty"`
+	Condition *ConditionInfo `json:"condition,omitempty"`
 }
 
 // +k8s:openapi-gen=false
@@ -292,19 +294,6 @@ type Dependent struct {
 
 // DeepCopyInto is an custom deepcopy function to deal with our use of the interface{} type
 func (i *CommandsIter) DeepCopyInto(out *CommandsIter) {
-
-	inBytes, err := json.Marshal(i)
-	if err != nil {
-		panic(err)
-	}
-	err = json.Unmarshal(inBytes, out)
-	if err != nil {
-		panic(err)
-	}
-}
-
-// DeepCopyInto is an custom deepcopy function to deal with our use of the interface{} type
-func (i *Condition) DeepCopyInto(out *Condition) {
 
 	inBytes, err := json.Marshal(i)
 	if err != nil {
